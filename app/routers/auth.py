@@ -42,8 +42,8 @@ def register(req: UserRegister, db: Session = Depends(get_db)):
         profile_id = doc.id
     else:
         # Bemor
-        doctor_id = None
-        if req.doctor_phone:
+        doctor_id = req.doctor_id
+        if not doctor_id and req.doctor_phone:
             doc_user = db.query(User).filter(User.phone == req.doctor_phone.strip()).first()
             if doc_user and doc_user.doctor_profile:
                 doctor_id = doc_user.doctor_profile.id
@@ -105,3 +105,18 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.get("/doctors")
+def get_available_doctors(db: Session = Depends(get_db)):
+    """Bemorlar ro'yxatdan o'tishda shifokorni tanlashi uchun ochiq ro'yxat."""
+    doctors = db.query(DoctorProfile).join(User, DoctorProfile.user_id == User.id).all()
+    return [
+        {
+            "id": d.id,
+            "full_name": d.user.full_name,
+            "phone": d.user.phone,
+            "specialty": d.specialty or "Akusher-ginekolog",
+            "clinic_name": d.clinic_name or "Tibbiyot muassasasi"
+        }
+        for d in doctors
+    ]

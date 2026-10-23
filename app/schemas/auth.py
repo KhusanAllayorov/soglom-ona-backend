@@ -14,6 +14,7 @@ class UserRegister(BaseModel):
     # Agar bemor bo'lsa:
     stage: Optional[str] = "pregnant"  # "pregnant" | "postpartum"
     stage_date: Optional[str] = None   # ISO format YYYY-MM-DD
+    doctor_id: Optional[str] = None    # Tanlangan shifokor IDsi
     doctor_phone: Optional[str] = None # Biriktirilgan shifokor raqami
 
 class UserLogin(BaseModel):

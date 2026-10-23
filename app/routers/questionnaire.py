@@ -123,7 +123,7 @@ def update_questionnaire(
         q.bands = req.bands
 
     # Eski savollarni yangilash
-    db.query(Question).filter(Question.questionnaire_id == q_id).delete()
+    db.query(Question).filter(Question.questionnaire_id == q_id).delete(synchronize_session='fetch')
     for i, quest in enumerate(req.questions):
         question = Question(
             id=str(uuid.uuid4()),
@@ -144,11 +144,14 @@ def delete_questionnaire(
     db: Session = Depends(get_db),
     doctor_user: User = Depends(require_doctor)
 ):
-    """So'rovnomani o'chirish (deaktivatsiya qilish)."""
+    """So'rovnomani o'chirish (yoki deaktivatsiya qilish)."""
     q = db.query(Questionnaire).filter(Questionnaire.id == q_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="So'rovnoma topilmadi")
 
-    q.is_active = False
+    if q.submissions and len(q.submissions) > 0:
+        q.is_active = False
+    else:
+        db.delete(q)
     db.commit()
     return {"message": "So'rovnoma muvaffaqiyatli o'chirildi"}

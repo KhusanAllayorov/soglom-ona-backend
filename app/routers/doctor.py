@@ -11,6 +11,7 @@ from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
 from app.schemas.patient import PatientListItem, PatientDetail, PatientUpdate
 from app.schemas.danger_check import ClinicalAlertResponse
+from app.schemas.doctor import DoctorProfileUpdate
 from app.services.auth import require_doctor
 
 router = APIRouter(prefix="/api/doctor", tags=["Shifokor"])
@@ -43,6 +44,72 @@ def doctor_dashboard(
         "total_patients": total_patients,
         "high_risk_patients": high_risk_count,
         "active_alerts": active_alerts_count
+    }
+
+@router.get("/profile")
+def get_doctor_profile(
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    doc = current_user.doctor_profile
+    if not doc:
+        raise HTTPException(status_code=404, detail="Shifokor profili topilmadi")
+
+    total_patients = db.query(PatientProfile).filter(PatientProfile.doctor_id == doc.id).count()
+    high_risk_count = (
+        db.query(PatientProfile)
+        .filter(PatientProfile.doctor_id == doc.id, PatientProfile.risk_category == "high")
+        .count()
+    )
+    active_alerts_count = (
+        db.query(ClinicalAlert)
+        .filter(ClinicalAlert.doctor_id == doc.id, ClinicalAlert.is_resolved == False)
+        .count()
+    )
+
+    return {
+        "id": doc.id,
+        "user_id": current_user.id,
+        "full_name": current_user.full_name,
+        "phone": current_user.phone,
+        "specialty": doc.specialty or "Akusher-ginekolog",
+        "clinic_name": doc.clinic_name or "Tibbiyot muassasasi",
+        "total_patients": total_patients,
+        "high_risk_patients": high_risk_count,
+        "active_alerts": active_alerts_count
+    }
+
+@router.put("/profile")
+def update_doctor_profile(
+    req: DoctorProfileUpdate,
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    doc = current_user.doctor_profile
+    if not doc:
+        raise HTTPException(status_code=404, detail="Shifokor profili topilmadi")
+
+    if req.full_name:
+        current_user.full_name = req.full_name.strip()
+    if req.phone:
+        clean_phone = req.phone.strip().replace(" ", "").replace("-", "")
+        # Check if phone is taken by another user
+        existing = db.query(User).filter(User.phone == clean_phone, User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Ushbu telefon raqami boshqa foydalanuvchida mavjud")
+        current_user.phone = clean_phone
+    if req.specialty is not None:
+        doc.specialty = req.specialty.strip()
+    if req.clinic_name is not None:
+        doc.clinic_name = req.clinic_name.strip()
+
+    db.commit()
+    return {
+        "message": "Shifokor profili muvaffaqiyatli yangilandi",
+        "full_name": current_user.full_name,
+        "phone": current_user.phone,
+        "specialty": doc.specialty,
+        "clinic_name": doc.clinic_name
     }
 
 @router.get("/patients", response_model=List[PatientListItem])
