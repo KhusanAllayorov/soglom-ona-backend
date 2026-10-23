@@ -5,6 +5,7 @@ from app.models.questionnaire import Questionnaire, Question
 from app.models.screening import ScreeningSubmission
 from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
+from app.models.message import ChatMessage
 
 __all__ = [
     "User",
@@ -15,4 +16,5 @@ __all__ = [
     "ScreeningSubmission",
     "DangerCheck",
     "ClinicalAlert",
+    "ChatMessage",
 ]

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -9,9 +10,11 @@ from app.models.patient import PatientProfile
 from app.models.screening import ScreeningSubmission
 from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
+from app.models.message import ChatMessage
 from app.schemas.patient import PatientListItem, PatientDetail, PatientUpdate
 from app.schemas.danger_check import ClinicalAlertResponse, AlertResolveRequest
 from app.schemas.doctor import DoctorProfileUpdate
+from app.schemas.message import MessageCreate, MessageResponse
 from app.services.auth import require_doctor
 
 router = APIRouter(prefix="/api/doctor", tags=["Shifokor"])
@@ -289,7 +292,57 @@ def resolve_alert(
 
     alert.is_resolved = True
     if req and req.doctor_notes and alert.patient:
-        alert.patient.notes = req.doctor_notes.strip()
+        note_text = req.doctor_notes.strip()
+        alert.patient.notes = note_text
+        chat_msg = ChatMessage(
+            patient_id=alert.patient_id,
+            sender_role="doctor",
+            sender_name=f"Dr. {current_user.full_name}",
+            content=f"[Shifokor tavsiyasi]: {note_text}",
+            created_at=datetime.utcnow()
+        )
+        db.add(chat_msg)
 
     db.commit()
     return {"message": "Ogohlantirish ko'rib chiqilgan deb belgilandi"}
+
+@router.get("/patients/{patient_id}/messages", response_model=List[MessageResponse])
+def get_patient_chat_messages(
+    patient_id: str,
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(ChatMessage)
+        .filter(ChatMessage.patient_id == patient_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
+@router.post("/patients/{patient_id}/messages", response_model=MessageResponse)
+def send_patient_chat_message(
+    patient_id: str,
+    req: MessageCreate,
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    patient = db.query(PatientProfile).filter(PatientProfile.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Bemor topilmadi")
+
+    if not req.content or not req.content.strip():
+        raise HTTPException(status_code=400, detail="Xabar matni bo'sh bo'lishi mumkin emas")
+
+    msg = ChatMessage(
+        patient_id=patient_id,
+        sender_role="doctor",
+        sender_name=f"Dr. {current_user.full_name}",
+        content=req.content.strip(),
+        created_at=datetime.utcnow()
+    )
+    db.add(msg)
+    patient.notes = req.content.strip()
+    db.commit()
+    db.refresh(msg)
+    return msg
+

@@ -11,9 +11,11 @@ from app.models.questionnaire import Questionnaire
 from app.models.screening import ScreeningSubmission
 from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
+from app.models.message import ChatMessage
 from app.schemas.screening import ScreeningSubmit, ScreeningResponse
 from app.schemas.danger_check import DangerCheckSubmit, DangerCheckResponse
 from app.schemas.patient import PatientDetail, PatientProfileUpdate
+from app.schemas.message import MessageCreate, MessageResponse
 from app.services.auth import require_patient
 
 router = APIRouter(prefix="/api/patient", tags=["Bemor"])
@@ -283,3 +285,45 @@ def get_my_danger_checks(
         .order_by(DangerCheck.logged_at.desc())
         .all()
     )
+
+@router.get("/messages", response_model=List[MessageResponse])
+def get_chat_messages(
+    current_user: User = Depends(require_patient),
+    db: Session = Depends(get_db)
+):
+    profile = current_user.patient_profile
+    if not profile:
+        raise HTTPException(status_code=404, detail="Bemor profili topilmadi")
+
+    return (
+        db.query(ChatMessage)
+        .filter(ChatMessage.patient_id == profile.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
+@router.post("/messages", response_model=MessageResponse)
+def send_chat_message(
+    req: MessageCreate,
+    current_user: User = Depends(require_patient),
+    db: Session = Depends(get_db)
+):
+    profile = current_user.patient_profile
+    if not profile:
+        raise HTTPException(status_code=404, detail="Bemor profili topilmadi")
+
+    if not req.content or not req.content.strip():
+        raise HTTPException(status_code=400, detail="Xabar matni bo'sh bo'lishi mumkin emas")
+
+    msg = ChatMessage(
+        patient_id=profile.id,
+        sender_role="patient",
+        sender_name=current_user.full_name,
+        content=req.content.strip(),
+        created_at=datetime.utcnow()
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return msg
+
