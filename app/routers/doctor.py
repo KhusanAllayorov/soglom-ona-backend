@@ -10,7 +10,7 @@ from app.models.screening import ScreeningSubmission
 from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
 from app.schemas.patient import PatientListItem, PatientDetail, PatientUpdate
-from app.schemas.danger_check import ClinicalAlertResponse
+from app.schemas.danger_check import ClinicalAlertResponse, AlertResolveRequest
 from app.schemas.doctor import DoctorProfileUpdate
 from app.services.auth import require_doctor
 
@@ -279,6 +279,7 @@ def get_active_alerts(
 @router.post("/alerts/{alert_id}/resolve")
 def resolve_alert(
     alert_id: str,
+    req: Optional[AlertResolveRequest] = None,
     current_user: User = Depends(require_doctor),
     db: Session = Depends(get_db)
 ):
@@ -287,5 +288,8 @@ def resolve_alert(
         raise HTTPException(status_code=404, detail="Ogohlantirish topilmadi")
 
     alert.is_resolved = True
+    if req and req.doctor_notes and alert.patient:
+        alert.patient.notes = req.doctor_notes.strip()
+
     db.commit()
     return {"message": "Ogohlantirish ko'rib chiqilgan deb belgilandi"}

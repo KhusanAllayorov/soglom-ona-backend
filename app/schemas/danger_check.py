@@ -34,3 +34,6 @@ class ClinicalAlertResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AlertResolveRequest(BaseModel):
+    doctor_notes: Optional[str] = None

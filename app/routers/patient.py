@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.patient import PatientProfile
+from app.models.doctor import DoctorProfile
 from app.models.questionnaire import Questionnaire
 from app.models.screening import ScreeningSubmission
 from app.models.danger_check import DangerCheck
 from app.models.alert import ClinicalAlert
 from app.schemas.screening import ScreeningSubmit, ScreeningResponse
 from app.schemas.danger_check import DangerCheckSubmit, DangerCheckResponse
-from app.schemas.patient import PatientDetail
+from app.schemas.patient import PatientDetail, PatientProfileUpdate
 from app.services.auth import require_patient
 
 router = APIRouter(prefix="/api/patient", tags=["Bemor"])
@@ -58,10 +59,71 @@ def get_patient_profile(
         blood_group=profile.blood_group,
         risk_category=profile.risk_category,
         notes=profile.notes,
+        doctor_id=profile.doctor_id,
         doctor_name=doctor_name,
         doctor_phone=doctor_phone,
         recent_screenings=recent_screenings,
         recent_danger_checks=recent_danger_checks
+    )
+
+@router.put("/profile", response_model=PatientDetail)
+def update_patient_profile(
+    req: PatientProfileUpdate,
+    current_user: User = Depends(require_patient),
+    db: Session = Depends(get_db)
+):
+    profile = current_user.patient_profile
+    if not profile:
+        raise HTTPException(status_code=404, detail="Bemor profili topilmadi")
+
+    if req.full_name is not None and req.full_name.strip():
+        current_user.full_name = req.full_name.strip()
+    if req.phone is not None and req.phone.strip():
+        clean_phone = req.phone.strip().replace(" ", "").replace("-", "")
+        existing = db.query(User).filter(User.phone == clean_phone, User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Ushbu telefon raqami boshqa foydalanuvchida mavjud")
+        current_user.phone = clean_phone
+    if req.stage is not None and req.stage in ["pregnant", "postpartum"]:
+        profile.stage = req.stage
+    if req.stage_date is not None:
+        profile.stage_date = req.stage_date
+    if req.blood_group is not None:
+        profile.blood_group = req.blood_group.strip()
+    if req.doctor_id is not None:
+        if req.doctor_id:
+            doc = db.query(DoctorProfile).filter(DoctorProfile.id == req.doctor_id).first()
+            if not doc:
+                raise HTTPException(status_code=404, detail="Tanlangan shifokor topilmadi")
+            profile.doctor_id = req.doctor_id
+        else:
+            profile.doctor_id = None
+
+    db.commit()
+    db.refresh(profile)
+    db.refresh(current_user)
+
+    doctor_name = None
+    doctor_phone = None
+    if profile.doctor and profile.doctor.user:
+        doctor_name = profile.doctor.user.full_name
+        doctor_phone = profile.doctor.user.phone
+
+    return PatientDetail(
+        id=profile.id,
+        user_id=current_user.id,
+        full_name=current_user.full_name,
+        phone=current_user.phone,
+        stage=profile.stage,
+        stage_date=profile.stage_date,
+        blood_group=profile.blood_group,
+        risk_category=profile.risk_category,
+        notes=profile.notes,
+        doctor_id=profile.doctor_id,
+        doctor_name=doctor_name,
+        doctor_phone=doctor_phone,
+        recent_screenings=[],
+        recent_danger_checks=[]
     )
 
 @router.post("/screenings", response_model=ScreeningResponse)

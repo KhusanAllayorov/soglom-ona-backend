@@ -31,6 +31,7 @@ class PatientDetail(BaseModel):
     blood_group: Optional[str]
     risk_category: str
     notes: Optional[str]
+    doctor_id: Optional[str] = None
     doctor_name: Optional[str] = None
     doctor_phone: Optional[str] = None
 
@@ -39,6 +40,14 @@ class PatientDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PatientProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    stage: Optional[str] = None
+    stage_date: Optional[datetime] = None
+    blood_group: Optional[str] = None
+    doctor_id: Optional[str] = None
 
 class PatientUpdate(BaseModel):
     risk_category: Optional[str] = None
