@@ -119,23 +119,28 @@ def update_questionnaire(
     q.title = req.title
     q.subtitle = req.subtitle
     q.description = req.description
+    if req.category:
+        q.category = req.category
     if req.bands:
         q.bands = req.bands
 
-    # Eski savollarni yangilash
-    db.query(Question).filter(Question.questionnaire_id == q_id).delete(synchronize_session='fetch')
+    # Eski savollarni tozalab yangilarini kiritish (cascade delete-orphan)
+    q.questions.clear()
+    db.flush()
     for i, quest in enumerate(req.questions):
+        opts = [opt.model_dump() if hasattr(opt, 'model_dump') else opt.dict() for opt in quest.options]
         question = Question(
             id=str(uuid.uuid4()),
             questionnaire_id=q.id,
             order=quest.order if quest.order is not None else i,
             text=quest.text,
             is_safety_critical=quest.is_safety_critical,
-            options=[opt.dict() for opt in quest.options]
+            options=opts
         )
-        db.add(question)
+        q.questions.append(question)
 
     db.commit()
+    db.refresh(q)
     return get_questionnaire(q_id, db)
 
 @router.delete("/{q_id}")
